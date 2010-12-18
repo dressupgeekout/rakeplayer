@@ -118,7 +118,7 @@ end
 desc 'List all the vorbiscomments for every song.'
 task :comments do
   Dir.glob('*/*/*.ogg').each do |song|
-    puts `vorbiscomment -l "#{song}"`, "---"
+    puts `vorbiscomment -l "#{song.escape_double_quotes}"`, "---"
   end
 end
 

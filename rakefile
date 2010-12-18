@@ -1,0 +1,128 @@
+#
+# Rakeplayer
+# Christian Koch <ckoch002@student.ucr.edu>
+#
+
+require 'rubygems'
+require 'rdiscount'
+require 'fileutils'
+
+class String
+  def escape_double_quotes
+    self.gsub('"', '\"')
+  end
+end
+
+# ----------
+
+# I *must* use the short-form options, otherwise I get bus errors when dealing
+# with files with quotes in their names. Totally bizarre.
+#
+def do_vorbiscomment(artist, album, position, title, path)
+  cmd = %Q(vorbiscomment -w )
+  cmd += %Q(-t "ARTIST=#{artist}" )
+  cmd += %Q(-t "ALBUM=#{album}" )
+  cmd += %Q(-t "TRACKNUMBER=#{position}" )
+  cmd += %Q(-t "TITLE=#{title}" )
+  cmd += %Q("#{path}")
+  sh cmd
+end
+
+# First, peek at the artist name. If it's "Various Artists", split up the given
+# path this way:
+#   Various Artists/<album>/<tracknumber> <artist> - <title>.ogg
+#
+# Otherwise, do it this way:
+#   <artist>/<album>/<tracknumber> <title>.ogg
+#
+def update_method(glob_string)
+  Dir.glob(glob_string).each do |path|
+    artist, album, position, title = "", "", "", ""
+
+    peek_artist = path.split('/').first
+    if peek_artist == 'Various Artists'
+      captures = (/Various\ Artists\/([^\/]+)\/(\d{2})\ ([^\/]+)\ -\ ([^\/]+)\.ogg/).
+        match(path).captures
+      artist   = captures[2]
+      album    = captures[0]
+      position = captures[1]
+      title    = captures[3]
+    else
+      captures = (/([^\/]+)\/([^\/]+)\/(\d{2})\ ([^\/]+)\.ogg/).
+        match(path).captures
+      artist   = captures[0]
+      album    = captures[1]
+      position = captures[2]
+      title    = captures[3]
+    end
+
+    do_vorbiscomment(
+      artist.escape_double_quotes,
+      album.escape_double_quotes,
+      position.escape_double_quotes,
+      title.escape_double_quotes, 
+      path.escape_double_quotes
+    )
+  end
+end
+
+# ----------
+
+desc 'Get rid of all those annoying .DS_Store files.'
+task :clean do
+  sh %q(find . | grep .DS_Store | sed 's/^/"/g; s/$/"/g' | xargs rm)
+end
+
+desc 'Update the entire music library.'
+task :update => [:clean] do
+  update_method('*/*/*.ogg')
+end
+
+desc 'Update only this artist.'
+task :update_artist => [:clean] do
+  artist = File.basename(ENV['PWD'])
+  update_method("#{artist}/*/*.ogg")
+end
+
+desc 'Update only this album.'
+task :update_album => [:clean] do
+  album  = File.basename(ENV['PWD'])
+  artist = ENV['PWD'].split('/')[-2, 1].first
+  update_method("#{artist}/#{album}/*.ogg")
+end
+
+# ----------
+
+desc 'List information about your entire library.'
+task :stats do
+  artists    = Dir.glob('*').select { |entry|
+    File.directory?(entry) and entry != "incomplete"
+  }
+  albums     = Dir.glob('*/*').select { |entry| File.directory?(entry) }
+  songs      = Dir.glob('*/*/*.ogg').select { |song| File.file?(song) }
+  total_size = songs.inject(0) { |sum, song| sum + File.size(song) }
+
+  puts <<-EOF
+No. artists:    #{artists.length}
+No. albums:     #{albums.length}
+No. songs:      #{songs.length}
+Total size:     #{total_size / 1024 / 1024} MB
+  EOF
+end
+
+desc 'List all the individual tracks.'
+task :list do
+  puts Dir.glob('*/*/*.ogg')
+end
+
+desc 'List all the vorbiscomments for every song.'
+task :comments do
+  Dir.glob('*/*/*.ogg').each do |song|
+    puts `vorbiscomment -l "#{song}"`, "---"
+  end
+end
+
+desc 'Generate documentation.'
+task :docs do
+  sh 'rdiscount readme.md > readme.html'
+end

@@ -1,6 +1,6 @@
 #
 # Rakeplayer
-# Christian Koch <ckoch002@student.ucr.edu>
+# Christian Koch <cfkoch@sdf.lonestar.org>
 #
 
 require 'rubygems'
@@ -32,6 +32,8 @@ end
 # path this way:
 #   Various Artists/<album>/<tracknumber> <artist> - <title>.ogg
 #
+# If it's 'fixme', then skip it altogether.
+#
 # Otherwise, do it this way:
 #   <artist>/<album>/<tracknumber> <title>.ogg
 #
@@ -47,6 +49,8 @@ def update_method(glob_string)
       album    = captures[0]
       position = captures[1]
       title    = captures[3]
+    elsif peek_artist == 'fixme'
+      next
     else
       captures = (/([^\/]+)\/([^\/]+)\/(\d{2})\ ([^\/]+)\.ogg/).
         match(path).captures
@@ -96,7 +100,7 @@ end
 desc 'List information about your entire library.'
 task :stats do
   artists    = Dir.glob('*').select { |entry|
-    File.directory?(entry) and entry != "incomplete"
+    File.directory?(entry) and entry != "fixme"
   }
   albums     = Dir.glob('*/*').select { |entry| File.directory?(entry) }
   songs      = Dir.glob('*/*/*.ogg').select { |song| File.file?(song) }
